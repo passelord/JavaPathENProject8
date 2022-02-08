@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -30,6 +33,7 @@ import tripPricer.TripPricer;
 @Service
 public class TourGuideService {
 	private Logger logger = LoggerFactory.getLogger(TourGuideService.class);
+	private final ExecutorService executorService = Executors.newScheduledThreadPool(60);
 	private final GpsUtil gpsUtil;
 	private final RewardsService rewardsService;
 	private final TripPricer tripPricer = new TripPricer();
@@ -82,7 +86,28 @@ public class TourGuideService {
 		user.setTripDeals(providers);
 		return providers;
 	}
-	
+
+	public void trackMultipleUserLocation(List<User> users) {
+		List<Future<VisitedLocation>> futures = new ArrayList<>();
+		for (User u : users) {
+			Future<VisitedLocation> future = executorService.submit(() -> trackUserLocation(u));
+			futures.add(future);
+		}
+		while (true) {
+			long rest = futures.stream().filter(f -> !f.isDone()).count();
+			if (rest == 0) {
+				break;
+			} else {
+				System.out.println("Remaining to track : " + rest);
+			}
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
 	public VisitedLocation trackUserLocation(User user) {
 		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
 		user.addToVisitedLocations(visitedLocation);
